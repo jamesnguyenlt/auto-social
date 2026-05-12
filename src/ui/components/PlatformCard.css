@@ -1,0 +1,189 @@
+/* Platform Card Styles */
+.platform-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.platform-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.platform-card.active {
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.1), 0 4px 16px rgba(88, 166, 255, 0.1);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(88, 166, 255, 0.15);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #58A6FF;
+}
+
+.card-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #F0F6FC;
+}
+
+.card-status {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6E7681;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-status.running {
+  color: #3FB950;
+}
+
+.card-toggle {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: #8B949E;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.card-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #F0F6FC;
+}
+
+.card-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideIn 0.2s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8B949E;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #F0F6FC;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.card-input:focus {
+  outline: none;
+  border-color: rgba(88, 166, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.card-input::placeholder {
+  color: #6E7681;
+}
+
+.card-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #C9D1D9;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.card-toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #58A6FF;
+  cursor: pointer;
+}
+
+.card-value {
+  margin-left: auto;
+  font-size: 11px;
+  color: #58A6FF;
+  font-weight: 500;
+}
+
+.card-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.card-btn.start {
+  background: linear-gradient(135deg, rgba(63, 185, 80, 0.15) 0%, rgba(63, 185, 80, 0.05) 100%);
+  color: #3FB950;
+  border: 1px solid rgba(63, 185, 80, 0.2);
+}
+
+.card-btn.start:hover {
+  background: linear-gradient(135deg, rgba(63, 185, 80, 0.25) 0%, rgba(63, 185, 80, 0.1) 100%);
+  box-shadow: 0 4px 12px rgba(63, 185, 80, 0.2);
+}
+
+.card-btn.stop {
+  background: linear-gradient(135deg, rgba(248, 81, 73, 0.15) 0%, rgba(248, 81, 73, 0.05) 100%);
+  color: #F85149;
+  border: 1px solid rgba(248, 81, 73, 0.2);
+}
+
+.card-btn.stop:hover {
+  background: linear-gradient(135deg, rgba(248, 81, 73, 0.25) 0%, rgba(248, 81, 73, 0.1) 100%);
+  box-shadow: 0 4px 12px rgba(248, 81, 73, 0.2);
+}

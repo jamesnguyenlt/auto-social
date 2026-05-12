@@ -6,7 +6,7 @@ export default defineManifest({
   name: "Auto-Social Manager",
   version: pkg.version,
   description: pkg.description,
-  action: { default_popup: "src/popup/index.html", default_title: "Auto-Social" },
+  action: { default_title: "Auto-Social" },
   options_page: "src/options/index.html",
   side_panel: { default_path: "src/sidepanel/index.html" },
   background: { service_worker: "src/background/index.ts", type: "module" },

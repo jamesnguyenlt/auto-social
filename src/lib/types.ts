@@ -26,3 +26,44 @@ export interface PlatformAdapter {
   meta: PlatformMeta;
   openCompose(draft: PostDraft): Promise<void>;
 }
+
+export interface Targets {
+  hashtags: string[];
+  users: string[];
+  threads: string[];
+}
+
+export interface ReplyConfig {
+  enabled: boolean;
+  delay: number;
+}
+
+export interface LikeConfig {
+  enabled: boolean;
+  count: number;
+}
+
+export interface FollowConfig {
+  enabled: boolean;
+  ratio: number;
+}
+
+export interface AutomationConfig {
+  reply: ReplyConfig;
+  like: LikeConfig;
+  follow: FollowConfig;
+}
+
+export interface PlatformConfig {
+  targets: Targets;
+  automations: AutomationConfig;
+}
+
+export type AutomationState = "idle" | "running" | "paused" | "error";
+
+export interface GlobalState {
+  platformConfigs: Record<PlatformId, PlatformConfig>;
+  sharedTargetsEnabled: boolean;
+  panelState: "expanded" | "collapsed";
+  botStates: Record<PlatformId, AutomationState>;
+}
