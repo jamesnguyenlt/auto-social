@@ -24,8 +24,44 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     storage.getPlatformConfig(platformId).then((config) => {
       const host = getPlatformHost(platformId);
       chrome.tabs.query({ url: host }, (tabs) => {
-        for (const tab of tabs) {
-          if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "START_AUTOMATION", config });
+        if (tabs.length > 0 && tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: "START_AUTOMATION", config });
+} else {
+            const searchPath = getSearchPath(platformId, config);
+            chrome.tabs.create({ url: searchPath }, (newTab) => {
+              if (newTab.id !== undefined) {
+                const tabId = newTab.id;
+                setTimeout(() => {
+                  chrome.tabs.sendMessage(tabId, { type: "START_AUTOMATION", config });
+                }, 3000);
+              }
+            });
+          }
+        storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
+      });
+    });
+    return true;
+  }
+
+  if (msg?.type === "START_FOLLOW_MODE" && msg.platformId) {
+    const platformId = msg.platformId as PlatformId;
+    const hashtags = msg.hashtags as string[];
+    storage.getPlatformConfig(platformId).then((config) => {
+      const host = getPlatformHost(platformId);
+      chrome.tabs.query({ url: host }, (tabs) => {
+        if (tabs.length > 0 && tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config, hashtags });
+        } else {
+          const firstHashtag = (hashtags[0] || "AI").replace("#", "");
+          const searchUrl = `https://www.threads.com/search?q=%23${encodeURIComponent(firstHashtag)}&serp_type=tags`;
+          chrome.tabs.create({ url: searchUrl }, (newTab) => {
+            if (newTab.id !== undefined) {
+              const tabId = newTab.id;
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config, hashtags });
+              }, 4000);
+            }
+          });
         }
         storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
       });
@@ -42,6 +78,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       storage.setBotState(platformId, "idle").then(() => sendResponse({ ok: true }));
     });
+    return true;
+  }
+
+  if (msg?.type === "UPDATE_STATS") {
+    storage.setBotStats(msg.stats).then(() => sendResponse({ ok: true }));
     return true;
   }
 
@@ -73,4 +114,13 @@ function getPlatformHost(platformId: PlatformId): string {
     case "facebook": return "*://www.facebook.com/*";
     default: return "*://*/*";
   }
+}
+
+function getSearchPath(platformId: PlatformId, config: any): string {
+  if (platformId === "threads") {
+    const hashtags = config?.automations?.followMode?.hashtags || config?.targets?.followHashtags || [];
+    const first = (hashtags[0] || "AI").replace("#", "");
+    return `https://www.threads.com/search?q=%23${encodeURIComponent(first)}&serp_type=tags`;
+  }
+  return adapters[platformId]?.meta.composeUrl || "https://www.threads.net";
 }

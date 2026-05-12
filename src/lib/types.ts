@@ -7,6 +7,7 @@ export interface PlatformMeta {
   supportsImage: boolean;
   supportsVideo: boolean;
   composeUrl?: string;
+  searchUrl?: string;
 }
 
 export type PostStatus = "draft" | "queued" | "opened" | "posted" | "skipped";
@@ -31,6 +32,7 @@ export interface Targets {
   hashtags: string[];
   users: string[];
   threads: string[];
+  followHashtags?: string[];
 }
 
 export interface ReplyConfig {
@@ -45,13 +47,22 @@ export interface LikeConfig {
 
 export interface FollowConfig {
   enabled: boolean;
+  mode: "none" | "follow" | "follow-unfollow";
   ratio: number;
+  maxPerSession: number;
 }
 
 export interface AutomationConfig {
   reply: ReplyConfig;
   like: LikeConfig;
   follow: FollowConfig;
+  followMode: {
+    enabled: boolean;
+    hashtags: string[];
+    maxPerHashtag: number;
+    delayBetweenFollows: number;
+    scrollDelay: number;
+  };
 }
 
 export interface PlatformConfig {

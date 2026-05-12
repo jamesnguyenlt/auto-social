@@ -25,11 +25,18 @@ export const storage = {
     const key = `config_${id}`;
     const r = await chrome.storage.local.get(key);
     return (r[key] as PlatformConfig) ?? {
-      targets: { hashtags: [], users: [], threads: [] },
+      targets: { hashtags: [], users: [], threads: [], followHashtags: [] },
       automations: {
         reply: { enabled: false, delay: 5000 },
         like: { enabled: false, count: 10 },
-        follow: { enabled: false, ratio: 1 },
+        follow: { enabled: false, mode: "none", ratio: 1, maxPerSession: 20 },
+        followMode: {
+          enabled: false,
+          hashtags: [],
+          maxPerHashtag: 50,
+          delayBetweenFollows: 2000,
+          scrollDelay: 3000,
+        },
       },
     };
   },
@@ -47,11 +54,18 @@ export const storage = {
     ids.forEach((id) => {
       const key = `config_${id}`;
       result[id] = (r[key] as PlatformConfig) ?? {
-        targets: { hashtags: [], users: [], threads: [] },
+        targets: { hashtags: [], users: [], threads: [], followHashtags: [] },
         automations: {
           reply: { enabled: false, delay: 5000 },
           like: { enabled: false, count: 10 },
-          follow: { enabled: false, ratio: 1 },
+          follow: { enabled: false, mode: "none", ratio: 1, maxPerSession: 20 },
+          followMode: {
+            enabled: false,
+            hashtags: [],
+            maxPerHashtag: 50,
+            delayBetweenFollows: 2000,
+            scrollDelay: 3000,
+          },
         },
       };
     });
@@ -67,5 +81,14 @@ export const storage = {
     const key = `bot_${id}`;
     const r = await chrome.storage.local.get(key);
     return (r[key] as AutomationState) ?? "idle";
+  },
+
+  async setBotStats(stats: { replies: number; likes: number; follows: number }) {
+    await chrome.storage.local.set({ botStats: stats });
+  },
+
+  async getBotStats(): Promise<{ replies: number; likes: number; follows: number }> {
+    const r = await chrome.storage.local.get("botStats");
+    return r.botStats ?? { replies: 0, likes: 0, follows: 0 };
   },
 };

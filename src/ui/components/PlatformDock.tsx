@@ -10,16 +10,23 @@ interface Props {
   expanded: boolean;
   sharedTargets: boolean;
   onToggle: () => void;
-  onBotAction: (id: PlatformId, action: 'start' | 'stop') => void;
+  onBotAction: (id: PlatformId, action: 'start' | 'stop', mode?: string) => void;
   onConfigUpdate: (id: PlatformId, config: PlatformConfig) => void;
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
-  targets: { hashtags: [], users: [], threads: [] },
+  targets: { hashtags: [], users: [], threads: [], followHashtags: [] },
   automations: {
     reply: { enabled: false, delay: 5000 },
     like: { enabled: false, count: 10 },
-    follow: { enabled: false, ratio: 1 },
+    follow: { enabled: false, mode: "none", ratio: 1, maxPerSession: 20 },
+    followMode: {
+      enabled: false,
+      hashtags: [],
+      maxPerHashtag: 50,
+      delayBetweenFollows: 2000,
+      scrollDelay: 3000,
+    },
   },
 };
 
@@ -51,18 +58,29 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
     onConfigUpdate(platformId, cfg);
   }, [cfg, platformId, onConfigUpdate]);
 
-  const updateTarget = useCallback((field: 'hashtags' | 'users' | 'threads', value: string[]) => {
-    setCfg(prev => ({ ...prev, targets: { ...prev.targets, [field]: value } }));
+  const updateTarget = useCallback((field: 'hashtags' | 'users' | 'threads' | 'followHashtags', value: string[]) => {
+    setCfg(prev => {
+      const c = prev ?? DEFAULT_CONFIG;
+      return { ...c, targets: { ...c.targets, [field]: value } };
+    });
   }, []);
 
   const updateAuto = useCallback((key: 'reply' | 'like' | 'follow', updates: any) => {
-    setCfg(prev => ({
-      ...prev,
-      automations: { ...prev.automations, [key]: { ...prev.automations[key], ...updates } },
-    }));
+    setCfg(prev => {
+      const c = prev ?? DEFAULT_CONFIG;
+      return { ...c, automations: { ...c.automations, [key]: { ...c.automations[key], ...updates } } };
+    });
+  }, []);
+
+  const updateFollowMode = useCallback((updates: any) => {
+    setCfg(prev => {
+      const c = prev ?? DEFAULT_CONFIG;
+      return { ...c, automations: { ...c.automations, followMode: { ...c.automations.followMode, ...updates } } };
+    });
   }, []);
 
   const isRunning = state === 'running';
+  const isThreads = platformId === 'threads';
 
   return (
     <div className={`platform-dock ${isRunning ? 'active' : ''}`}>
@@ -83,6 +101,102 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
 
       {expanded && (
         <div className="dock-body">
+          {/* ===== Follow Mode (Threads only) ===== */}
+          {isThreads && (
+            <div className="dock-section">
+              <div className="section-header">FOLLOW MODE</div>
+              <div className="auto-row">
+                <div className="auto-label">
+                  <span className="auto-icon">👥</span>
+                  <span>Auto-follow from hashtag search</span>
+                </div>
+                <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={cfg.automations.followMode?.enabled ?? false}
+                    onChange={(e) => updateFollowMode({ enabled: e.target.checked })}
+                  />
+                  <span className="toggle-track"><span className="toggle-knob" /></span>
+                </label>
+              </div>
+
+              {cfg.automations.followMode?.enabled && (
+                <>
+                  <div className="target-box wide">
+                    <div className="target-label">#Hashtags to follow</div>
+                    <input
+                      className="target-input"
+                      type="text"
+                      placeholder="#AI #Tech #Startup"
+                      value={(cfg.automations.followMode?.hashtags || []).join(' ')}
+                      onChange={(e) => updateFollowMode({ hashtags: e.target.value.split(' ').filter(h => h.startsWith('#')) })}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                  </div>
+
+                  <div className="follow-mode-params">
+                    <div className="param-row">
+                      <span className="param-label">Max per hashtag</span>
+                      <input
+                        type="number"
+                        className="param-input"
+                        min="5"
+                        max="200"
+                        value={cfg.automations.followMode?.maxPerHashtag ?? 50}
+                        onChange={(e) => updateFollowMode({ maxPerHashtag: Number(e.target.value) })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div className="param-row">
+                      <span className="param-label">Delay between follows</span>
+                      <input
+                        type="number"
+                        className="param-input"
+                        min="500"
+                        max="10000"
+                        step="500"
+                        value={cfg.automations.followMode?.delayBetweenFollows ?? 2000}
+                        onChange={(e) => updateFollowMode({ delayBetweenFollows: Number(e.target.value) })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="param-unit">ms</span>
+                    </div>
+                    <div className="param-row">
+                      <span className="param-label">Scroll delay</span>
+                      <input
+                        type="number"
+                        className="param-input"
+                        min="1000"
+                        max="10000"
+                        step="500"
+                        value={cfg.automations.followMode?.scrollDelay ?? 3000}
+                        onChange={(e) => updateFollowMode({ scrollDelay: Number(e.target.value) })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="param-unit">ms</span>
+                    </div>
+                  </div>
+
+                  <button
+                    className={`dock-start-btn ${isRunning ? 'stop' : 'start'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isRunning) {
+                        onBotAction(platformId, 'stop');
+                      } else {
+                        onBotAction(platformId, 'start', 'follow-mode');
+                      }
+                    }}
+                  >
+                    {isRunning ? '⏹ Stop Follow Mode' : '▶ Start Follow Mode'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ===== Targets ===== */}
           <div className="dock-section">
             <div className="section-header">TARGETS</div>
             <div className="targets-grid">
@@ -125,115 +239,121 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
             </div>
           </div>
 
-          <div className="dock-section">
-            <div className="section-header">AUTOMATIONS</div>
+          {/* ===== Automations ===== */}
+          {!isThreads && (
+            <div className="dock-section">
+              <div className="section-header">AUTOMATIONS</div>
 
-            <div className="auto-row">
-              <div className="auto-label">
-                <span className="auto-icon">💬</span>
-                <span>Auto-reply on scroll</span>
-              </div>
-              <div className="auto-controls">
-                <span className="auto-range-label">Delay:</span>
-                <span className="auto-range-val">5s</span>
-                <input
-                  type="range" min="1" max="30"
-                  value={cfg.automations.reply.delay / 1000}
-                  onChange={(e) => updateAuto('reply', { delay: Number(e.target.value) * 1000 })}
-                  onClick={(e) => e.stopPropagation()}
-                  className="auto-slider"
-                />
-                <span className="auto-range-val">30s</span>
-                <span className="auto-val-badge">{cfg.automations.reply.delay / 1000}s</span>
-                <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+              <div className="auto-row">
+                <div className="auto-label">
+                  <span className="auto-icon">💬</span>
+                  <span>Auto-reply on scroll</span>
+                </div>
+                <div className="auto-controls">
+                  <span className="auto-range-label">Delay:</span>
+                  <span className="auto-range-val">5s</span>
                   <input
-                    type="checkbox"
-                    checked={cfg.automations.reply.enabled}
-                    onChange={(e) => updateAuto('reply', { enabled: e.target.checked })}
+                    type="range" min="1" max="30"
+                    value={(cfg.automations.reply.delay ?? 5000) / 1000}
+                    onChange={(e) => updateAuto('reply', { delay: Number(e.target.value) * 1000 })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="auto-slider"
                   />
-                  <span className="toggle-track"><span className="toggle-knob" /></span>
-                </label>
+                  <span className="auto-range-val">30s</span>
+                  <span className="auto-val-badge">{((cfg.automations.reply.delay ?? 5000) / 1000).toFixed(0)}s</span>
+                  <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={cfg.automations.reply.enabled ?? false}
+                      onChange={(e) => updateAuto('reply', { enabled: e.target.checked })}
+                    />
+                    <span className="toggle-track"><span className="toggle-knob" /></span>
+                  </label>
+                </div>
               </div>
-            </div>
 
-            <div className="auto-row">
-              <div className="auto-label">
-                <span className="auto-icon">❤️</span>
-                <span>Auto-like</span>
-              </div>
-              <div className="auto-controls">
-                <span className="auto-range-label">Per session:</span>
-                <span className="auto-range-val">10</span>
-                <input
-                  type="range" min="1" max="50"
-                  value={cfg.automations.like.count}
-                  onChange={(e) => updateAuto('like', { count: Number(e.target.value) })}
-                  onClick={(e) => e.stopPropagation()}
-                  className="auto-slider"
-                />
-                <span className="auto-range-val">50</span>
-                <span className="auto-val-badge">{cfg.automations.like.count}</span>
-                <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+              <div className="auto-row">
+                <div className="auto-label">
+                  <span className="auto-icon">❤️</span>
+                  <span>Auto-like</span>
+                </div>
+                <div className="auto-controls">
+                  <span className="auto-range-label">Per session:</span>
+                  <span className="auto-range-val">10</span>
                   <input
-                    type="checkbox"
-                    checked={cfg.automations.like.enabled}
-                    onChange={(e) => updateAuto('like', { enabled: e.target.checked })}
+                    type="range" min="1" max="50"
+                    value={cfg.automations.like.count ?? 10}
+                    onChange={(e) => updateAuto('like', { count: Number(e.target.value) })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="auto-slider"
                   />
-                  <span className="toggle-track"><span className="toggle-knob" /></span>
-                </label>
+                  <span className="auto-range-val">50</span>
+                  <span className="auto-val-badge">{cfg.automations.like.count ?? 10}</span>
+                  <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={cfg.automations.like.enabled ?? false}
+                      onChange={(e) => updateAuto('like', { enabled: e.target.checked })}
+                    />
+                    <span className="toggle-track"><span className="toggle-knob" /></span>
+                  </label>
+                </div>
               </div>
-            </div>
 
-            <div className="auto-row">
-              <div className="auto-label">
-                <span className="auto-icon">👤</span>
-                <span>Auto-follow</span>
-              </div>
-              <div className="auto-controls">
-                <span className="auto-range-label">Ratio:</span>
-                <span className="auto-range-val">1:0</span>
-                <input
-                  type="range" min="0" max="10" step="0.5"
-                  value={cfg.automations.follow.ratio}
-                  onChange={(e) => updateAuto('follow', { ratio: Number(e.target.value) })}
-                  onClick={(e) => e.stopPropagation()}
-                  className="auto-slider"
-                />
-                <span className="auto-range-val">1:10</span>
-                <span className="auto-val-badge">1:{cfg.automations.follow.ratio}</span>
-                <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+              <div className="auto-row">
+                <div className="auto-label">
+                  <span className="auto-icon">👤</span>
+                  <span>Auto-follow</span>
+                </div>
+                <div className="auto-controls">
+                  <span className="auto-range-label">Max:</span>
+                  <span className="auto-range-val">10</span>
                   <input
-                    type="checkbox"
-                    checked={cfg.automations.follow.enabled}
-                    onChange={(e) => updateAuto('follow', { enabled: e.target.checked })}
+                    type="range" min="5" max="100"
+                    value={cfg.automations.follow.maxPerSession ?? 20}
+                    onChange={(e) => updateAuto('follow', { maxPerSession: Number(e.target.value) })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="auto-slider"
                   />
-                  <span className="toggle-track"><span className="toggle-knob" /></span>
-                </label>
+                  <span className="auto-range-val">100</span>
+                  <span className="auto-val-badge">{cfg.automations.follow.maxPerSession ?? 20}</span>
+                  <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={cfg.automations.follow.enabled ?? false}
+                      onChange={(e) => updateAuto('follow', { enabled: e.target.checked })}
+                    />
+                    <span className="toggle-track"><span className="toggle-knob" /></span>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="dock-action-row">
-            <button
-              className={`dock-start-btn ${isRunning ? 'stop' : 'start'}`}
-              onClick={(e) => { e.stopPropagation(); onBotAction(platformId, isRunning ? 'stop' : 'start'); }}
-            >
-              {isRunning ? '⏹ Stop Bot' : `▶ Start ${PLATFORM_LABELS[platformId].split(' ')[0]} Bot`}
-            </button>
-            <div className="dock-bot-status">
-              <span className={`status-dot ${state}`} />
-              <span className="status-label">Status: {state}</span>
+          {/* Action Row */}
+          {!isThreads && (
+            <div className="dock-action-row">
+              <button
+                className={`dock-start-btn ${isRunning ? 'stop' : 'start'}`}
+                onClick={(e) => { e.stopPropagation(); onBotAction(platformId, isRunning ? 'stop' : 'start'); }}
+              >
+                {isRunning ? '⏹ Stop Bot' : `▶ Start ${PLATFORM_LABELS[platformId].split(' ')[0]} Bot`}
+              </button>
+              <div className="dock-bot-status">
+                <span className={`status-dot ${state}`} />
+                <span className="status-label">Status: {state}</span>
+              </div>
+              <button className="dock-logs-btn" onClick={(e) => { e.stopPropagation(); setLogsOpen(!logsOpen); }}>
+                Logs {logsOpen ? '▲' : '▼'}
+              </button>
             </div>
-            <button className="dock-logs-btn" onClick={(e) => { e.stopPropagation(); setLogsOpen(!logsOpen); }}>
-              Logs {logsOpen ? '▲' : '▼'}
-            </button>
-          </div>
+          )}
 
-          {logsOpen && (
+          {(logsOpen || isRunning) && (
             <div className="dock-logs">
-              <div className="log-entry">[10:32] Bot started for {PLATFORM_LABELS[platformId]}</div>
-              <div className="log-entry">[10:33] Scanning for target hashtags...</div>
-              <div className="log-entry">[10:34] Auto-like triggered on post #AI</div>
+              <div className="log-entry">[INFO] Follow mode configured for hashtag search</div>
+              <div className="log-entry">[INFO] Bot will navigate to Threads search page</div>
+              <div className="log-entry">[INFO] Scroll and auto-follow users in results</div>
             </div>
           )}
         </div>
