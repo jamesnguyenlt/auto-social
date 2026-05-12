@@ -89,7 +89,7 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
   const isThreads = platformId === 'threads';
 
   return (
-    <div className={`platform-dock ${isRunning ? 'active' : ''}`}>
+    <div className={`platform-dock ${expanded ? 'expanded' : ''} ${isRunning ? 'active' : ''}`}>
       <div className="dock-row header" onClick={onToggle}>
         <button className="dock-checkbox" onClick={(e) => { e.stopPropagation(); onBotAction(platformId, isRunning ? 'stop' : 'start'); }}>
           <span className={`check ${isRunning ? 'on' : 'off'}`}>{isRunning ? '◉' : '○'}</span>
@@ -286,51 +286,50 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
           )}
 
           {/* ===== Targets ===== */}
-          <div className="dock-section">
-            <div className="section-header">TARGETS</div>
-            <div className="targets-grid">
-              <div className="target-box">
-                <div className="target-label">#Hashtags</div>
-                <input
-                  className="target-input"
-                  type="text"
-                  placeholder="#AI #Tech"
-                  value={cfg.targets.hashtags.join(' ')}
-                  onChange={(e) => updateTarget('hashtags', e.target.value.split(' ').filter(h => h.startsWith('#')))}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
-              </div>
-              <div className="target-box">
-                <div className="target-label">@Users</div>
-                <input
-                  className="target-input"
-                  type="text"
-                  placeholder="@elonmusk"
-                  value={cfg.targets.users.join(' ')}
-                  onChange={(e) => updateTarget('users', e.target.value.split(' ').filter(u => u.startsWith('@')))}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
-              </div>
-              <div className="target-box wide">
-                <div className="target-label">Thread URLs</div>
-                <input
-                  className="target-input"
-                  type="text"
-                  placeholder="Paste Thread URL"
-                  value={cfg.targets.threads.join(' ')}
-                  onChange={(e) => updateTarget('threads', e.target.value.split(' ').filter(t => t.includes('threads.net')))}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+          {!isThreads && (
+            <div className="dock-section">
+              <div className="section-header">TARGETS</div>
+              <div className="targets-grid">
+                <div className="target-box">
+                  <div className="target-label">#Hashtags</div>
+                  <input
+                    className="target-input"
+                    type="text"
+                    placeholder="#AI #Tech"
+                    value={cfg.targets.hashtags.join(' ')}
+                    onChange={(e) => updateTarget('hashtags', e.target.value.split(' ').filter(h => h.startsWith('#')))}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                </div>
+                <div className="target-box">
+                  <div className="target-label">@Users</div>
+                  <input
+                    className="target-input"
+                    type="text"
+                    placeholder="@elonmusk"
+                    value={cfg.targets.users.join(' ')}
+                    onChange={(e) => updateTarget('users', e.target.value.split(' ').filter(u => u.startsWith('@')))}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                </div>
+                <div className="target-box wide">
+                  <div className="target-label">Thread URLs</div>
+                  <input
+                    className="target-input"
+                    type="text"
+                    placeholder="Paste Thread URL"
+                    value={cfg.targets.threads.join(' ')}
+                    onChange={(e) => updateTarget('threads', e.target.value.split(' ').filter(t => t.includes('threads.net')))}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          
-
-          {/* ===== Automations ===== */}
           {!isThreads && (
             <div className="dock-section">
               <div className="section-header">AUTOMATIONS</div>

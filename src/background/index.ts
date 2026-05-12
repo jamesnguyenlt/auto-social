@@ -1,6 +1,6 @@
 import { adapters } from "@/lib/platforms";
 import { storage } from "@/lib/storage";
-import type { PostDraft, PlatformId } from "@/lib/types";
+import type { PostDraft, PlatformId, PlatformConfig } from "@/lib/types";
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[auto-social] installed");
@@ -45,26 +45,25 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg?.type === "START_FOLLOW_MODE" && msg.platformId) {
     const platformId = msg.platformId as PlatformId;
-    storage.getPlatformConfig(platformId).then((config) => {
-      const followMode = config?.automations?.followMode;
-      const searchUrl = buildFollowModeUrl(followMode);
-      chrome.storage.local.set({ pendingFollowMode: followMode });
-      const host = getPlatformHost(platformId);
-      chrome.tabs.query({ url: host }, (tabs) => {
-        if (tabs.length > 0 && tabs[0].id) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
-        } else {
-          chrome.tabs.create({ url: searchUrl }, (newTab) => {
-            if (newTab.id !== undefined) {
-              const tabId = newTab.id;
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config });
-              }, 4000);
-            }
-          });
-        }
-        storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
-      });
+    const config = msg.config as PlatformConfig;
+    const followMode = config?.automations?.followMode;
+    const searchUrl = buildFollowModeUrl(followMode);
+    chrome.storage.local.set({ pendingFollowMode: followMode });
+    const host = getPlatformHost(platformId);
+    chrome.tabs.query({ url: host }, (tabs) => {
+      if (tabs.length > 0 && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
+      } else {
+        chrome.tabs.create({ url: searchUrl }, (newTab) => {
+          if (newTab.id !== undefined) {
+            const tabId = newTab.id;
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config });
+            }, 4000);
+          }
+        });
+      }
+      storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
     });
     return true;
   }
@@ -110,7 +109,7 @@ function getPlatformHost(platformId: PlatformId): string {
   switch (platformId) {
     case "x": return "*://x.com/*";
     case "instagram": return "*://www.instagram.com/*";
-    case "threads": return "*://www.threads.net/*";
+    case "threads": return "*://*.threads.net/*";
     case "tiktok": return "*://www.tiktok.com/*";
     case "facebook": return "*://www.facebook.com/*";
     default: return "*://*/*";

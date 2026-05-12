@@ -58,10 +58,14 @@ export function AutoSocialDock() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleBotAction = useCallback((platformId: PlatformId, action: 'start' | 'stop') => {
+  const handleBotAction = useCallback((platformId: PlatformId, action: 'start' | 'stop', mode?: string) => {
     setBotStates(prev => ({ ...prev, [platformId]: action === 'start' ? 'running' : 'idle' }));
-    chrome.runtime.sendMessage({ type: action === 'start' ? 'START_BOT' : 'STOP_BOT', platformId });
-  }, []);
+    if (action === 'start' && mode === 'follow-mode') {
+      chrome.runtime.sendMessage({ type: 'START_FOLLOW_MODE', platformId, config: configs[platformId] });
+    } else {
+      chrome.runtime.sendMessage({ type: action === 'start' ? 'START_BOT' : 'STOP_BOT', platformId });
+    }
+  }, [configs]);
 
   const handleConfigUpdate = useCallback((platformId: PlatformId, config: PlatformConfig) => {
     setConfigs(prev => ({ ...prev, [platformId]: config }));

@@ -1,6 +1,7 @@
 /* ===== PlatformDock Card ===== */
 /* Spec: glassmorphism bg:rgba(255,255,255,0.03), border:rgba(255,255,255,0.08), 24px radius */
 
+/* Card - always overflow hidden to clip non-expanded state */
 .platform-dock {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(20px);
@@ -8,6 +9,12 @@
   border-radius: 16px;
   overflow: hidden;
   transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+/* When expanded, allow natural height but still clip overflow */
+.platform-dock.expanded {
+  overflow: hidden;
 }
 
 .platform-dock:hover {
@@ -161,25 +168,9 @@
   flex-direction: column;
   gap: 16px;
   animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 500px;
   overflow-y: auto;
-}
-
-.dock-body::-webkit-scrollbar {
-  width: 4px;
-}
-
-.dock-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.dock-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.dock-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  max-height: 480px;
+  flex-shrink: 0;
 }
 
 @keyframes slideIn {
