@@ -9,21 +9,27 @@ interface Props {
   state: AutomationState;
   expanded: boolean;
   sharedTargets: boolean;
+  threadsLogs?: string[];
+  threadsStats?: { followed: number; thisTarget: number; max: number } | null;
   onToggle: () => void;
   onBotAction: (id: PlatformId, action: 'start' | 'stop', mode?: string) => void;
   onConfigUpdate: (id: PlatformId, config: PlatformConfig) => void;
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
-  targets: { hashtags: [], users: [], threads: [], followHashtags: [] },
+  targets: { hashtags: [], users: [], threads: [], searchKeywords: [], profileFollowers: [], profileFollowing: [] },
   automations: {
     reply: { enabled: false, delay: 5000 },
     like: { enabled: false, count: 10 },
     follow: { enabled: false, mode: "none", ratio: 1, maxPerSession: 20 },
     followMode: {
       enabled: false,
+      targetType: 'hashtags',
+      profileListType: 'followers',
       hashtags: [],
-      maxPerHashtag: 50,
+      searchKeywords: [],
+      profileUsername: '',
+      maxPerTarget: 50,
       delayBetweenFollows: 2000,
       scrollDelay: 3000,
     },
@@ -46,7 +52,7 @@ const PLATFORM_LABELS: Record<PlatformId, string> = {
   facebook: 'Facebook',
 };
 
-export function PlatformDock({ platformId, config, state, expanded, onToggle, onBotAction, onConfigUpdate }: Props) {
+export function PlatformDock({ platformId, config, state, expanded, onToggle, onBotAction, onConfigUpdate, threadsLogs = [], threadsStats = null }: Props) {
   const [cfg, setCfg] = useState<PlatformConfig>(() => config ?? DEFAULT_CONFIG);
   const [logsOpen, setLogsOpen] = useState(false);
 
@@ -58,7 +64,7 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
     onConfigUpdate(platformId, cfg);
   }, [cfg, platformId, onConfigUpdate]);
 
-  const updateTarget = useCallback((field: 'hashtags' | 'users' | 'threads' | 'followHashtags', value: string[]) => {
+  const updateTarget = useCallback((field: 'hashtags' | 'users' | 'threads' | 'searchKeywords', value: string[]) => {
     setCfg(prev => {
       const c = prev ?? DEFAULT_CONFIG;
       return { ...c, targets: { ...c.targets, [field]: value } };
@@ -108,7 +114,7 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
               <div className="auto-row">
                 <div className="auto-label">
                   <span className="auto-icon">👥</span>
-                  <span>Auto-follow from hashtag search</span>
+                  <span>Auto-follow users from targets</span>
                 </div>
                 <label className="auto-toggle" onClick={(e) => e.stopPropagation()}>
                   <input
@@ -122,29 +128,99 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
 
               {cfg.automations.followMode?.enabled && (
                 <>
-                  <div className="target-box wide">
-                    <div className="target-label">#Hashtags to follow</div>
-                    <input
-                      className="target-input"
-                      type="text"
-                      placeholder="#AI #Tech #Startup"
-                      value={(cfg.automations.followMode?.hashtags || []).join(' ')}
-                      onChange={(e) => updateFollowMode({ hashtags: e.target.value.split(' ').filter(h => h.startsWith('#')) })}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                  {/* Target Type Selector */}
+                  <div className="target-type-selector">
+                    {(['hashtags', 'keywords', 'profile'] as const).map((type) => (
+                      <button
+                        key={type}
+                        className={`target-type-btn ${cfg.automations.followMode?.targetType === type ? 'active' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); updateFollowMode({ targetType: type }); }}
+                      >
+                        {type === 'hashtags' && '🏷 #Hashtags'}
+                        {type === 'keywords' && '🔍 Keywords'}
+                        {type === 'profile' && '👤 Profile'}
+                      </button>
+                    ))}
                   </div>
+
+                  {/* Hashtags Mode */}
+                  {cfg.automations.followMode?.targetType === 'hashtags' && (
+                    <div className="target-box wide">
+                      <div className="target-label">#Hashtags to follow</div>
+                      <input
+                        className="target-input"
+                        type="text"
+                        placeholder="#AI #Tech #Startup"
+                        value={(cfg.automations.followMode?.hashtags || []).join(' ')}
+                        onChange={(e) => updateFollowMode({ hashtags: e.target.value.split(' ').filter(h => h.startsWith('#')) })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                    </div>
+                  )}
+
+                  {/* Keywords Mode */}
+                  {cfg.automations.followMode?.targetType === 'keywords' && (
+                    <div className="target-box wide">
+                      <div className="target-label">Search keywords</div>
+                      <input
+                        className="target-input"
+                        type="text"
+                        placeholder="AI tools productivity automation"
+                        value={(cfg.automations.followMode?.searchKeywords || []).join(' ')}
+                        onChange={(e) => updateFollowMode({ searchKeywords: e.target.value.split(' ').filter(k => k.length > 0 && !k.startsWith('#')) })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                    </div>
+                  )}
+
+                  {/* Profile Mode */}
+                  {cfg.automations.followMode?.targetType === 'profile' && (
+                    <div className="profile-target-section">
+                      <div className="target-box wide">
+                        <div className="target-label">@Username</div>
+                        <input
+                          className="target-input"
+                          type="text"
+                          placeholder="@username"
+                          value={cfg.automations.followMode?.profileUsername || ''}
+                          onChange={(e) => {
+                            let val = e.target.value.trim();
+                            if (!val.startsWith('@')) val = '@' + val;
+                            updateFollowMode({ profileUsername: val.replace(/\s/g, '') });
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <button className="target-add" onClick={(e) => e.stopPropagation()}>+</button>
+                      </div>
+                      <div className="profile-list-type-row">
+                        <span className="profile-list-label">List:</span>
+                        <div className="profile-list-toggle">
+                          {(['followers', 'following'] as const).map((listType) => (
+                            <button
+                              key={listType}
+                              className={`profile-list-btn ${cfg.automations.followMode?.profileListType === listType ? 'active' : ''}`}
+                              onClick={(e) => { e.stopPropagation(); updateFollowMode({ profileListType: listType }); }}
+                            >
+                              {listType === 'followers' ? 'Followers' : 'Following'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="follow-mode-params">
                     <div className="param-row">
-                      <span className="param-label">Max per hashtag</span>
+                      <span className="param-label">Max per target</span>
                       <input
                         type="number"
                         className="param-input"
                         min="5"
                         max="200"
-                        value={cfg.automations.followMode?.maxPerHashtag ?? 50}
-                        onChange={(e) => updateFollowMode({ maxPerHashtag: Number(e.target.value) })}
+                        value={cfg.automations.followMode?.maxPerTarget ?? 50}
+                        onChange={(e) => updateFollowMode({ maxPerTarget: Number(e.target.value) })}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
@@ -191,6 +267,19 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
                   >
                     {isRunning ? '⏹ Stop Follow Mode' : '▶ Start Follow Mode'}
                   </button>
+
+                  {isRunning && (
+                    <button className="dock-logs-btn" onClick={(e) => { e.stopPropagation(); setLogsOpen(!logsOpen); }}>
+                      Logs {logsOpen ? '▲' : '▼'}
+                    </button>
+                  )}
+
+                  {isRunning && threadsStats && (
+                    <div className="dock-bot-status">
+                      <span className="status-dot running" />
+                      <span className="status-label">{threadsStats.followed}/{threadsStats.max}</span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -238,6 +327,8 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
               </div>
             </div>
           </div>
+
+          
 
           {/* ===== Automations ===== */}
           {!isThreads && (
@@ -349,11 +440,25 @@ export function PlatformDock({ platformId, config, state, expanded, onToggle, on
             </div>
           )}
 
-          {(logsOpen || isRunning) && (
+          {logsOpen && threadsLogs.length > 0 ? (
             <div className="dock-logs">
-              <div className="log-entry">[INFO] Follow mode configured for hashtag search</div>
-              <div className="log-entry">[INFO] Bot will navigate to Threads search page</div>
-              <div className="log-entry">[INFO] Scroll and auto-follow users in results</div>
+              {threadsLogs.slice().reverse().map((entry, i) => {
+                const isFollowed = entry.includes('FOLLOWED');
+                const isError = entry.includes('ERROR') || entry.includes('DONE') || entry.includes('SKIP');
+                const isCycle = entry.includes('--- CYCLE ---');
+                return (
+                  <div
+                    key={i}
+                    className={`log-entry ${isFollowed ? 'success' : ''} ${isError ? 'error' : ''} ${isCycle ? 'separator' : ''}`}
+                  >
+                    {entry}
+                  </div>
+                );
+              })}
+            </div>
+          ) : logsOpen && threadsLogs.length === 0 && (
+            <div className="dock-logs">
+              <div className="log-entry">[Waiting for logs...]</div>
             </div>
           )}
         </div>

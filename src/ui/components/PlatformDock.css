@@ -29,6 +29,7 @@
   padding: 12px 14px;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .dock-checkbox {
@@ -65,6 +66,7 @@
   font-size: 13px;
   color: #C9D1D9;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .dock-platform-name {
@@ -84,6 +86,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .dock-state-badge.idle {
@@ -126,6 +129,7 @@
 .dock-expand-btn {
   width: 24px;
   height: 24px;
+  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,6 +140,7 @@
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .dock-expand-btn:hover {
@@ -144,13 +149,37 @@
   transform: scale(1.05);
 }
 
-/* Body */
+/* Card min-height when collapsed so expand/shrink feels consistent */
+.platform-dock {
+  min-height: 58px;
+}
+
+/* Body - scrollable when content exceeds max height */
 .dock-body {
   padding: 0 14px 14px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.dock-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dock-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dock-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.dock-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 @keyframes slideIn {
@@ -518,6 +547,146 @@
   color: #6E7681;
 }
 
+/* Target Type Selector */
+.target-type-selector {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.target-type-btn {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6E7681;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.target-type-btn:hover {
+  color: #C9D1D9;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.target-type-btn.active {
+  background: rgba(88, 166, 255, 0.2);
+  color: #58A6FF;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  box-shadow: 0 0 8px rgba(88, 166, 255, 0.15);
+}
+
+/* Profile Target Section */
+.profile-target-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-list-type-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.profile-list-label {
+  font-size: 11px;
+  color: #6E7681;
+}
+
+.profile-list-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.profile-list-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #6E7681;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-list-btn:hover {
+  color: #C9D1D9;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-list-btn.active {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58A6FF;
+  border-color: rgba(88, 166, 255, 0.3);
+}
+
+/* Floating Follow Counter Badge */
+.follow-counter-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(88, 166, 255, 0.15), 0 0 0 1px rgba(88, 166, 255, 0.05);
+  animation: follow-counter-pulse 2s ease-in-out infinite;
+  margin: 0 0 4px;
+}
+
+@keyframes follow-counter-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(88, 166, 255, 0.15), 0 0 0 1px rgba(88, 166, 255, 0.05); }
+  50% { box-shadow: 0 4px 20px rgba(88, 166, 255, 0.3), 0 0 0 2px rgba(88, 166, 255, 0.1); }
+}
+
+.counter-icon {
+  font-size: 14px;
+}
+
+.counter-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #58A6FF;
+  min-width: 20px;
+  text-align: center;
+}
+
+.counter-sep {
+  font-size: 13px;
+  color: #6E7681;
+}
+
+.counter-max {
+  font-size: 13px;
+  color: #6E7681;
+  font-weight: 500;
+}
+
+.counter-label {
+  font-size: 11px;
+  color: #6E7681;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.counter-total {
+  font-size: 12px;
+  color: #3FB950;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 /* Logs */
 .dock-logs {
   padding: 10px;
@@ -528,14 +697,51 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 100px;
+  max-height: 140px;
   overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.dock-logs::-webkit-scrollbar {
+  width: 3px;
+}
+
+.dock-logs::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.dock-logs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.dock-logs::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .log-entry {
   color: #6E7681;
   padding: 2px 0;
+  font-size: 11px;
+}
+
+.log-entry.success {
+  color: #3FB950;
+  font-weight: 600;
+}
+
+.log-entry.error {
+  color: #F85149;
+}
+
+.log-entry.separator {
+  color: #58A6FF;
+  font-weight: 600;
+  padding-top: 6px;
+  border-top: 1px solid rgba(88, 166, 255, 0.15);
+  margin-top: 4px;
 }
 
 .log-entry:first-child {

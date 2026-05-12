@@ -32,7 +32,9 @@ export interface Targets {
   hashtags: string[];
   users: string[];
   threads: string[];
-  followHashtags?: string[];
+  searchKeywords: string[];
+  profileFollowers: string[];
+  profileFollowing: string[];
 }
 
 export interface ReplyConfig {
@@ -52,17 +54,23 @@ export interface FollowConfig {
   maxPerSession: number;
 }
 
+export interface FollowModeConfig {
+  enabled: boolean;
+  targetType: 'hashtags' | 'keywords' | 'profile';
+  profileListType: 'followers' | 'following';
+  hashtags: string[];
+  searchKeywords: string[];
+  profileUsername: string;
+  maxPerTarget: number;
+  delayBetweenFollows: number;
+  scrollDelay: number;
+}
+
 export interface AutomationConfig {
   reply: ReplyConfig;
   like: LikeConfig;
   follow: FollowConfig;
-  followMode: {
-    enabled: boolean;
-    hashtags: string[];
-    maxPerHashtag: number;
-    delayBetweenFollows: number;
-    scrollDelay: number;
-  };
+  followMode: FollowModeConfig;
 }
 
 export interface PlatformConfig {

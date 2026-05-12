@@ -11,6 +11,8 @@ export function AutoSocialDock() {
   const [sharedTargets, setSharedTargets] = useState(false);
   const [expandedId, setExpandedId] = useState<PlatformId | null>('x');
   const [saving, setSaving] = useState(false);
+  const [threadsLogs, setThreadsLogs] = useState<string[]>([]);
+  const [threadsStats, setThreadsStats] = useState({ followed: 0, thisTarget: 0, max: 50 });
 
   useEffect(() => {
     const load = async () => {
@@ -25,6 +27,35 @@ export function AutoSocialDock() {
       setSharedTargets(shared.sharedTargets ?? false);
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      chrome.tabs.query({ url: '*://www.threads.net/*' }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_LOGS' }, (res) => {
+            if (res?.logs && res.logs.length > 0) {
+              setThreadsLogs(res.logs.slice(0, 30));
+            }
+          });
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_STATS' }, (res) => {
+            if (res) {
+              setThreadsStats(s => ({
+                ...s,
+                followed: res.totalFollowed ?? 0,
+                thisTarget: res.followedThisTarget ?? 0,
+              }));
+            }
+          });
+        }
+      });
+      chrome.storage.local.get('followModeState', (r) => {
+        if (r.followModeState?.opts?.maxPerTarget) {
+          setThreadsStats(s => ({ ...s, max: r.followModeState.opts.maxPerTarget }));
+        }
+      });
+    }, 1500);
+    return () => clearInterval(interval);
   }, []);
 
   const handleBotAction = useCallback((platformId: PlatformId, action: 'start' | 'stop') => {
@@ -108,6 +139,8 @@ export function AutoSocialDock() {
             onToggle={() => setExpandedId(expandedId === id ? null : id)}
             onBotAction={handleBotAction}
             onConfigUpdate={handleConfigUpdate}
+            threadsLogs={id === 'threads' ? threadsLogs : []}
+            threadsStats={id === 'threads' ? threadsStats : null}
           />
         ))}
 

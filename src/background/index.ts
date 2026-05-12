@@ -45,20 +45,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg?.type === "START_FOLLOW_MODE" && msg.platformId) {
     const platformId = msg.platformId as PlatformId;
-    const hashtags = msg.hashtags as string[];
     storage.getPlatformConfig(platformId).then((config) => {
+      const followMode = config?.automations?.followMode;
+      const searchUrl = buildFollowModeUrl(followMode);
+      chrome.storage.local.set({ pendingFollowMode: followMode });
       const host = getPlatformHost(platformId);
       chrome.tabs.query({ url: host }, (tabs) => {
         if (tabs.length > 0 && tabs[0].id) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config, hashtags });
+          chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
         } else {
-          const firstHashtag = (hashtags[0] || "AI").replace("#", "");
-          const searchUrl = `https://www.threads.com/search?q=%23${encodeURIComponent(firstHashtag)}&serp_type=tags`;
           chrome.tabs.create({ url: searchUrl }, (newTab) => {
             if (newTab.id !== undefined) {
               const tabId = newTab.id;
               setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config, hashtags });
+                chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config });
               }, 4000);
             }
           });
@@ -76,8 +76,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       for (const tab of tabs) {
         if (tab.id) chrome.tabs.sendMessage(tab.id, { type: "STOP_AUTOMATION" });
       }
-      storage.setBotState(platformId, "idle").then(() => sendResponse({ ok: true }));
     });
+    chrome.storage.local.remove(['followModeState', 'pendingFollowMode']);
+    storage.setBotState(platformId, "idle").then(() => sendResponse({ ok: true }));
     return true;
   }
 
@@ -118,9 +119,27 @@ function getPlatformHost(platformId: PlatformId): string {
 
 function getSearchPath(platformId: PlatformId, config: any): string {
   if (platformId === "threads") {
-    const hashtags = config?.automations?.followMode?.hashtags || config?.targets?.followHashtags || [];
-    const first = (hashtags[0] || "AI").replace("#", "");
-    return `https://www.threads.com/search?q=%23${encodeURIComponent(first)}&serp_type=tags`;
+    const followMode = config?.automations?.followMode;
+    return buildFollowModeUrl(followMode);
   }
   return adapters[platformId]?.meta.composeUrl || "https://www.threads.net";
+}
+
+function buildFollowModeUrl(followMode: any): string {
+  const targetType = followMode?.targetType || 'hashtags';
+  if (targetType === 'keywords') {
+    const keywords = followMode?.searchKeywords || [];
+    const first = keywords[0]?.trim() || 'AI';
+    return `https://www.threads.net/search?q=${encodeURIComponent(first)}&serp_type=top`;
+  }
+  if (targetType === 'profile') {
+    const username = (followMode?.profileUsername || '').replace('@', '').trim() || 'username';
+    const listType = followMode?.profileListType || 'followers';
+    return listType === 'following'
+      ? `https://www.threads.net/@${encodeURIComponent(username)}?following=1`
+      : `https://www.threads.net/@${encodeURIComponent(username)}?lg=1`;
+  }
+  const hashtags = followMode?.hashtags || [];
+  const first = (hashtags[0] || 'AI').replace('#', '');
+  return `https://www.threads.net/search?q=%23${encodeURIComponent(first)}&serp_type=tags`;
 }
