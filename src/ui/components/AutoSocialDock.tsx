@@ -31,7 +31,7 @@ export function AutoSocialDock() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      chrome.tabs.query({ url: '*://www.threads.net/*' }, (tabs) => {
+      chrome.tabs.query({ url: '*://*.threads.com/*' }, (tabs) => {
         if (tabs[0]?.id) {
           chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_LOGS' }, (res) => {
             if (res?.logs && res.logs.length > 0) {

@@ -48,22 +48,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const config = msg.config as PlatformConfig;
     const followMode = config?.automations?.followMode;
     const searchUrl = buildFollowModeUrl(followMode);
-    chrome.storage.local.set({ pendingFollowMode: followMode });
-    const host = getPlatformHost(platformId);
-    chrome.tabs.query({ url: host }, (tabs) => {
-      if (tabs.length > 0 && tabs[0].id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
-      } else {
-        chrome.tabs.create({ url: searchUrl }, (newTab) => {
-          if (newTab.id !== undefined) {
-            const tabId = newTab.id;
-            setTimeout(() => {
-              chrome.tabs.sendMessage(tabId, { type: "START_FOLLOW_MODE", config });
-            }, 4000);
+    // Save config first, then also write pendingFollowMode, THEN interact with tabs.
+    // This ensures the content script on the new page can always find the state.
+    storage.savePlatformConfig(platformId, config).then(() => {
+      chrome.storage.local.set({ pendingFollowMode: followMode }, () => {
+        console.log('[auto-social] pendingFollowMode written to storage', followMode);
+        const host = getPlatformHost(platformId);
+        chrome.tabs.query({ url: host }, (tabs) => {
+          if (tabs.length > 0 && tabs[0].id) {
+            chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
+          } else {
+            chrome.tabs.create({ url: searchUrl });
+            // Don't send message — the new content script will pick up
+            // pendingFollowMode from storage via tryResumeFromStorage()
           }
+          storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
         });
-      }
-      storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
+      });
     });
     return true;
   }
@@ -109,7 +110,7 @@ function getPlatformHost(platformId: PlatformId): string {
   switch (platformId) {
     case "x": return "*://x.com/*";
     case "instagram": return "*://www.instagram.com/*";
-    case "threads": return "*://*.threads.net/*";
+    case "threads": return "*://*.threads.com/*";
     case "tiktok": return "*://www.tiktok.com/*";
     case "facebook": return "*://www.facebook.com/*";
     default: return "*://*/*";
@@ -121,24 +122,25 @@ function getSearchPath(platformId: PlatformId, config: any): string {
     const followMode = config?.automations?.followMode;
     return buildFollowModeUrl(followMode);
   }
-  return adapters[platformId]?.meta.composeUrl || "https://www.threads.net";
+  return adapters[platformId]?.meta.composeUrl || "https://www.threads.com";
 }
 
 function buildFollowModeUrl(followMode: any): string {
+  const base = "https://www.threads.com";
   const targetType = followMode?.targetType || 'hashtags';
   if (targetType === 'keywords') {
     const keywords = followMode?.searchKeywords || [];
     const first = keywords[0]?.trim() || 'AI';
-    return `https://www.threads.net/search?q=${encodeURIComponent(first)}&serp_type=top`;
+    return `${base}/search?q=${encodeURIComponent(first)}&serp_type=top`;
   }
   if (targetType === 'profile') {
     const username = (followMode?.profileUsername || '').replace('@', '').trim() || 'username';
     const listType = followMode?.profileListType || 'followers';
     return listType === 'following'
-      ? `https://www.threads.net/@${encodeURIComponent(username)}?following=1`
-      : `https://www.threads.net/@${encodeURIComponent(username)}?lg=1`;
+      ? `${base}/@${encodeURIComponent(username)}?following=1`
+      : `${base}/@${encodeURIComponent(username)}?lg=1`;
   }
   const hashtags = followMode?.hashtags || [];
   const first = (hashtags[0] || 'AI').replace('#', '');
-  return `https://www.threads.net/search?q=%23${encodeURIComponent(first)}&serp_type=tags`;
+  return `${base}/search?q=%23${encodeURIComponent(first)}&serp_type=tags`;
 }

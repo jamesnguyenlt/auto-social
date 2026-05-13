@@ -17,6 +17,8 @@ export default defineManifest({
     "https://www.instagram.com/*",
     "https://www.threads.net/*",
     "https://threads.net/*",
+    "https://www.threads.com/*",
+    "https://threads.com/*",
     "https://www.tiktok.com/*",
     "https://www.facebook.com/*",
     "https://m.facebook.com/*",
@@ -24,7 +26,7 @@ export default defineManifest({
   content_scripts: [
     { matches: ["https://x.com/*", "https://twitter.com/*"], js: ["src/content/x.ts"], run_at: "document_idle" },
     { matches: ["https://www.instagram.com/*"], js: ["src/content/instagram.ts"], run_at: "document_idle" },
-    { matches: ["https://www.threads.net/*", "https://threads.net/*"], js: ["src/content/threads.ts"], run_at: "document_idle" },
+    { matches: ["https://www.threads.net/*", "https://threads.net/*", "https://www.threads.com/*", "https://threads.com/*"], js: ["src/content/threads.ts"], run_at: "document_idle" },
     { matches: ["https://www.tiktok.com/*"], js: ["src/content/tiktok.ts"], run_at: "document_idle" },
     { matches: ["https://www.facebook.com/*", "https://m.facebook.com/*"], js: ["src/content/facebook.ts"], run_at: "document_idle" },
   ],

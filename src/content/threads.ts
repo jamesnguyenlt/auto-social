@@ -3,6 +3,8 @@ import type { FollowModeState } from "@/lib/storage";
 
 console.debug("[auto-social] threads content script loaded");
 
+const THREADS_BASE = "https://www.threads.com";
+
 let automationTimer: ReturnType<typeof setInterval> | null = null;
 let currentOpts: any = null;
 
@@ -28,9 +30,10 @@ function log(msg: string) {
   syncStateToStorage();
 }
 
-function syncStateToStorage() {
+function syncStateToStorage(forceActive?: boolean) {
+  const isActive = forceActive === true || (followSession.mode !== 'idle' && !!automationTimer);
   const state: FollowModeState = {
-    active: followSession.mode !== 'idle' && !!automationTimer,
+    active: isActive,
     mode: followSession.mode as 'hashtags' | 'keywords' | 'profile',
     profileListType: followSession.profileListType,
     targets: followSession.targets,
@@ -41,6 +44,7 @@ function syncStateToStorage() {
     targetIndex: followSession.targetIndex,
     pageUrl: window.location.href,
   };
+  console.debug('[auto-social] syncStateToStorage:', { active: isActive, mode: followSession.mode, forceActive });
   chrome.storage.local.set({ followModeState: state });
 }
 
@@ -125,10 +129,11 @@ function startFollowMode(opts: FollowModeConfig) {
       targets: [username],
       logs: [],
     };
-    syncStateToStorage();
+    // Force active=true BEFORE navigation so the new content script instance resumes
+    syncStateToStorage(true);
 
     const listType = opts?.profileListType || 'followers';
-    const profileUrl = `https://www.threads.net/@${encodeURIComponent(username)}${listType === 'following' ? '?following=1' : '?lg=1'}`;
+    const profileUrl = `${THREADS_BASE}/@${encodeURIComponent(username)}${listType === 'following' ? '?following=1' : '?lg=1'}`;
     log(`Navigating to: ${profileUrl}`);
     window.location.href = profileUrl;
     return;
@@ -153,12 +158,13 @@ function startFollowMode(opts: FollowModeConfig) {
     targets,
     logs: [],
   };
-  syncStateToStorage();
+  // Force active=true BEFORE navigation so the new content script instance resumes
+  syncStateToStorage(true);
 
   const firstTarget = targets[0];
   const searchUrl = targetType === 'hashtags'
-    ? `https://www.threads.net/search?q=%23${encodeURIComponent(firstTarget)}&serp_type=tags`
-    : `https://www.threads.net/search?q=${encodeURIComponent(firstTarget)}&serp_type=top`;
+    ? `${THREADS_BASE}/search?q=%23${encodeURIComponent(firstTarget)}&serp_type=tags`
+    : `${THREADS_BASE}/search?q=${encodeURIComponent(firstTarget)}&serp_type=top`;
 
   log(`Navigating to: ${searchUrl}`);
   window.location.href = searchUrl;
@@ -166,8 +172,10 @@ function startFollowMode(opts: FollowModeConfig) {
 
 function isOnTargetPage(): boolean {
   const url = window.location.href;
-  if (followSession.mode === 'profile') return url.includes('threads.net/@');
-  if (followSession.mode === 'hashtags' || followSession.mode === 'keywords') return url.includes('threads.net/search');
+  const isThreadsDomain = url.includes('threads.net') || url.includes('threads.com');
+  if (!isThreadsDomain) return false;
+  if (followSession.mode === 'profile') return url.includes('/@');
+  if (followSession.mode === 'hashtags' || followSession.mode === 'keywords') return url.includes('/search');
   return false;
 }
 
@@ -181,12 +189,12 @@ function getNextUrl(target: string): string {
   if (followSession.mode === 'profile') {
     const username = target.replace('@', '');
     const listType = followSession.profileListType;
-    return `https://www.threads.net/@${encodeURIComponent(username)}${listType === 'following' ? '?following=1' : '?lg=1'}`;
+    return `${THREADS_BASE}/@${encodeURIComponent(username)}${listType === 'following' ? '?following=1' : '?lg=1'}`;
   }
   if (followSession.mode === 'hashtags') {
-    return `https://www.threads.net/search?q=%23${encodeURIComponent(target)}&serp_type=tags`;
+    return `${THREADS_BASE}/search?q=%23${encodeURIComponent(target)}&serp_type=tags`;
   }
-  return `https://www.threads.net/search?q=${encodeURIComponent(target)}&serp_type=top`;
+  return `${THREADS_BASE}/search?q=${encodeURIComponent(target)}&serp_type=top`;
 }
 
 const FOLLOW_LABELS = [
@@ -194,17 +202,100 @@ const FOLLOW_LABELS = [
   '追随', 'theo'
 ];
 
+const ALREADY_FOLLOWING_LABELS = [
+  'following', 'đang theo dõi', 'requested', 'đã yêu cầu',
+  'siguiendo', 'solicitado',
+];
+
 function isFollowButton(btn: Element): boolean {
   const aria = (btn as HTMLElement).getAttribute('aria-label') || '';
-  const lower = aria.toLowerCase().trim();
-  if (lower === 'avatar' || lower === 'like' || lower === 'thích' ||
-      lower === 'reply' || lower === 'trả lời' || lower === 'share' ||
-      lower === 'repost' || lower === 'đăng lại' || lower === 'bookmark' ||
-      lower === 'save' || lower === 'more' || lower === 'xem thêm') return false;
-  return FOLLOW_LABELS.some(l => lower === l || lower.includes(l));
+  const text = (btn as HTMLElement).innerText?.trim() || '';
+  const lowerAria = aria.toLowerCase().trim();
+  const lowerText = text.toLowerCase().trim();
+
+  // Exclude known non-follow buttons
+  const excludeExact = ['avatar', 'like', 'thích', 'reply', 'trả lời', 'share',
+    'repost', 'đăng lại', 'bookmark', 'save', 'more', 'xem thêm', 'close', 'đóng', ''];
+  if (excludeExact.includes(lowerAria) && lowerText === '') return false;
+  if (excludeExact.includes(lowerAria)) return false;
+
+  // Exclude "Following" / "Đang theo dõi" buttons (already followed)
+  if (ALREADY_FOLLOWING_LABELS.some(l => lowerAria.includes(l) || lowerText.includes(l))) return false;
+
+  // Match follow labels in aria-label OR innerText
+  return FOLLOW_LABELS.some(l => lowerAria.includes(l) || lowerText === l || lowerText.includes(l));
 }
 
-function runFollowCycle() {
+/* ───── Hover-card based follow approach ───── */
+
+function triggerHover(element: Element) {
+  const rect = element.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const opts = { view: window, bubbles: true, cancelable: true, clientX: x, clientY: y };
+
+  element.dispatchEvent(new MouseEvent('mouseover', opts));
+  element.dispatchEvent(new MouseEvent('mouseenter', { ...opts, bubbles: false }));
+  element.dispatchEvent(new MouseEvent('mousemove', opts));
+  // Also trigger pointer events for React
+  element.dispatchEvent(new PointerEvent('pointerover', opts));
+  element.dispatchEvent(new PointerEvent('pointerenter', { ...opts, bubbles: false }));
+  element.dispatchEvent(new PointerEvent('pointermove', opts));
+}
+
+function dismissHover(element: Element) {
+  const rect = element.getBoundingClientRect();
+  const opts = { view: window, bubbles: true, cancelable: true, clientX: rect.left - 50, clientY: rect.top - 50 };
+  element.dispatchEvent(new MouseEvent('mouseleave', { ...opts, bubbles: false }));
+  element.dispatchEvent(new MouseEvent('mouseout', opts));
+  element.dispatchEvent(new PointerEvent('pointerleave', { ...opts, bubbles: false }));
+  element.dispatchEvent(new PointerEvent('pointerout', opts));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Wait for a follow button to appear in the DOM (from hover card) */
+async function waitForFollowButton(timeoutMs = 2000): Promise<Element | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const allBtns = document.querySelectorAll('[role="button"]');
+    for (const btn of allBtns) {
+      if (isFollowButton(btn)) {
+        // Ensure it's visible (not hidden off-screen)
+        const rect = (btn as HTMLElement).getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return btn;
+        }
+      }
+    }
+    await sleep(150);
+  }
+  return null;
+}
+
+/** Get all profile links on the page that haven't been processed yet */
+function getProfileLinks(): HTMLAnchorElement[] {
+  const links = document.querySelectorAll('a[href*="/@"]');
+  const seen = new Set<string>();
+  const result: HTMLAnchorElement[] = [];
+
+  for (const link of links) {
+    const href = (link as HTMLAnchorElement).getAttribute('href') || '';
+    // Only match profile links like /@username (not post links /@user/post/123)
+    const match = href.match(/^\/@([^/?]+)\/?$/);
+    if (!match) continue;
+    const username = match[1].toLowerCase();
+    if (seen.has(username)) continue;
+    if ((link as HTMLElement).hasAttribute('data-auto-processed')) continue;
+    seen.add(username);
+    result.push(link as HTMLAnchorElement);
+  }
+  return result;
+}
+
+async function runFollowCycle() {
   if (!isOnTargetPage()) {
     log('SKIP: not on target page');
     return;
@@ -214,21 +305,8 @@ function runFollowCycle() {
   const maxPerTarget = opts?.maxPerTarget || 50;
 
   log(`--- CYCLE ---`);
-  log(`URL: ${window.location.href.replace('https://www.threads.net', '').slice(0, 50)}`);
+  log(`URL: ${window.location.href.replace(/https:\/\/www\.threads\.(net|com)/, '').slice(0, 50)}`);
   log(`Progress: ${followSession.followedThisTarget}/${maxPerTarget} this target | ${followSession.totalFollowed} total`);
-
-  const allBtns = document.querySelectorAll('[role="button"]');
-  log(`Total [role=button] elements: ${allBtns.length}`);
-
-  const candidates = Array.from(allBtns).filter(isFollowButton);
-  log(`Follow candidates: ${candidates.length}`);
-  if (candidates.length > 0 && candidates.length <= 10) {
-    candidates.forEach((btn, i) => {
-      const aria = btn.getAttribute('aria-label') || '';
-      const txt = (btn as HTMLElement).innerText?.trim() || '';
-      log(`  [${i+1}] aria="${aria}" text="${txt}"`);
-    });
-  }
 
   if (followSession.followedThisTarget >= maxPerTarget) {
     const nextTarget = getNextTarget();
@@ -237,6 +315,7 @@ function runFollowCycle() {
       followSession.currentTarget = nextTarget;
       followSession.followedThisTarget = 0;
       log(`Target complete — moving to: ${nextTarget}`);
+      syncStateToStorage(true);
       window.location.href = getNextUrl(nextTarget);
     } else {
       log("DONE: All targets exhausted");
@@ -245,42 +324,92 @@ function runFollowCycle() {
     return;
   }
 
-  let followed = 0;
-  let skippedAlready = 0;
-  let skippedParent = 0;
+  // Step 1: Try direct follow buttons first (visible on profile follower lists)
+  const directBtns = Array.from(document.querySelectorAll('[role="button"]')).filter(isFollowButton);
+  if (directBtns.length > 0) {
+    log(`Found ${directBtns.length} direct follow button(s) — clicking`);
+    for (const btn of directBtns) {
+      if (followSession.followedThisTarget >= maxPerTarget) break;
+      const parent = btn.closest('[data-pressable-container="true"], article, [role="article"]');
+      if (parent && parent.hasAttribute('data-auto-followed')) continue;
+      if (parent) parent.setAttribute('data-auto-followed', 'true');
 
-  for (const btn of candidates) {
-    if (followSession.followedThisTarget >= maxPerTarget) break;
+      (btn as HTMLElement).click();
+      followSession.totalFollowed++;
+      followSession.followedThisTarget++;
+      const label = btn.getAttribute('aria-label') || (btn as HTMLElement).innerText?.trim() || '?';
+      log(`FOLLOWED #${followSession.totalFollowed} (${followSession.followedThisTarget}/${maxPerTarget}): "${label}"`);
 
-    const parent = btn.closest('[data-pressable-container="true"], article, [role="article"]');
-    if (parent && parent.hasAttribute('data-auto-followed')) {
-      skippedParent++;
-      continue;
+      chrome.runtime.sendMessage({
+        type: "UPDATE_STATS",
+        stats: { replies: 0, likes: 0, follows: followSession.totalFollowed },
+      });
+
+      await sleep(opts?.delayBetweenFollows || 2000);
     }
-
-    const innerText = (btn as HTMLElement).innerText?.trim().toLowerCase() || '';
-    if (innerText === 'following' || innerText === 'requested') {
-      skippedAlready++;
-      continue;
-    }
-
-    if (parent) parent.setAttribute('data-auto-followed', 'true');
-    (btn as HTMLElement).click();
-    followed++;
-    followSession.totalFollowed++;
-    followSession.followedThisTarget++;
-
-    const aria = btn.getAttribute('aria-label') || '';
-    log(`FOLLOWED (${followSession.totalFollowed}/${followSession.followedThisTarget}/${maxPerTarget}): aria="${aria}"`);
-
-    chrome.runtime.sendMessage({
-      type: "UPDATE_STATS",
-      stats: { replies: 0, likes: 0, follows: followSession.totalFollowed },
-    });
+    window.scrollBy(0, 400);
+    syncStateToStorage();
+    return;
   }
 
+  // Step 2: Hover-card approach for search results / feed
+  const profileLinks = getProfileLinks();
+  log(`Profile links found: ${profileLinks.length}`);
+
+  if (profileLinks.length === 0) {
+    log('No unprocessed profile links — scrolling down');
+    window.scrollBy(0, 600);
+    await sleep(1500);
+    syncStateToStorage();
+    return;
+  }
+
+  let followed = 0;
+  let skipped = 0;
+
+  for (const link of profileLinks) {
+    if (followSession.followedThisTarget >= maxPerTarget) break;
+    if (!automationTimer) break; // stopped
+
+    const username = link.getAttribute('href')?.replace('/@', '') || '?';
+    link.setAttribute('data-auto-processed', 'true');
+
+    // Scroll the link into view
+    link.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await sleep(500);
+
+    // Trigger hover to open the popover card
+    triggerHover(link);
+    log(`Hovering @${username}...`);
+
+    // Wait for follow button to appear in the hover card
+    const followBtn = await waitForFollowButton(2500);
+
+    if (followBtn) {
+      (followBtn as HTMLElement).click();
+      followed++;
+      followSession.totalFollowed++;
+      followSession.followedThisTarget++;
+      const label = followBtn.getAttribute('aria-label') || (followBtn as HTMLElement).innerText?.trim() || '?';
+      log(`FOLLOWED #${followSession.totalFollowed} @${username} (${followSession.followedThisTarget}/${maxPerTarget}): "${label}"`);
+
+      chrome.runtime.sendMessage({
+        type: "UPDATE_STATS",
+        stats: { replies: 0, likes: 0, follows: followSession.totalFollowed },
+      });
+    } else {
+      log(`SKIP @${username} — no follow button found (may already follow)`);
+      skipped++;
+    }
+
+    // Dismiss the hover card
+    dismissHover(link);
+    await sleep(opts?.delayBetweenFollows || 2000);
+  }
+
+  // Scroll down to load more
   window.scrollBy(0, 500);
-  log(`Cycle done — followed: ${followed}, already following: ${skippedAlready}, parent marked: ${skippedParent}`);
+  log(`Cycle done — followed: ${followed}, skipped: ${skipped}`);
   syncStateToStorage();
 }
 
@@ -343,9 +472,25 @@ function initFollowLoop() {
     return;
   }
 
-  const delay = (currentOpts?.delayBetweenFollows || 2000) + (currentOpts?.scrollDelay || 3000);
-  log(`Starting follow loop — cycle every ${delay}ms`);
-  automationTimer = setInterval(runFollowCycle, delay);
+  const baseDelay = (currentOpts?.scrollDelay || 3000);
+  log(`Starting follow loop — base delay ${baseDelay}ms between cycles`);
+
+  // Use a dummy timer ID to signal "running" (checked by automationTimer !== null)
+  automationTimer = setInterval(() => {}, 999999) as ReturnType<typeof setInterval>;
+
+  // Run the async loop sequentially
+  (async () => {
+    while (automationTimer) {
+      try {
+        await runFollowCycle();
+      } catch (err) {
+        log(`ERROR in follow cycle: ${err}`);
+      }
+      // Wait between cycles
+      await sleep(baseDelay);
+    }
+    log('Follow loop exited');
+  })();
 }
 
 function waitForContentAndInit() {
@@ -391,29 +536,79 @@ function waitForContentAndInit() {
   }, maxWait);
 }
 
-chrome.storage.local.get(['followModeState', 'pendingFollowMode'], (result) => {
-  const savedState = result.followModeState as FollowModeState | undefined;
-  const pendingOpts = result.pendingFollowMode as FollowModeConfig | undefined;
+// Retry storage reads to handle race condition where background script
+// may not have written pendingFollowMode yet when this content script loads
+function tryResumeFromStorage(retries = 5, delayMs = 500) {
+  chrome.storage.local.get(['followModeState', 'pendingFollowMode'], (result) => {
+    const savedState = result.followModeState as FollowModeState | undefined;
+    const pendingOpts = result.pendingFollowMode as FollowModeConfig | undefined;
 
-  if (savedState?.active && savedState.opts) {
-    log(`Resuming saved session — mode: ${savedState.mode}`);
-    followSession = {
-      totalFollowed: savedState.totalFollowed,
-      followedThisTarget: savedState.followedThisTarget,
-      currentTarget: savedState.targets[savedState.targetIndex] || savedState.profileUsername || '',
-      targetIndex: savedState.targetIndex,
-      mode: savedState.mode,
-      profileListType: savedState.profileListType,
-      targets: savedState.targets,
-      logs: [],
-    };
-    currentOpts = savedState.opts;
-    waitForContentAndInit();
-  } else if (pendingOpts && !automationTimer) {
-    log(`Starting from pending opts — mode: ${pendingOpts.targetType}`);
-    currentOpts = pendingOpts;
-    waitForContentAndInit();
-  }
-});
+    console.debug('[auto-social] Storage check:', {
+      hasFollowModeState: !!savedState,
+      stateActive: savedState?.active,
+      hasOpts: !!savedState?.opts,
+      hasPending: !!pendingOpts,
+      retriesLeft: retries,
+      url: window.location.href.slice(0, 80),
+    });
+
+    if (savedState?.active && savedState.opts) {
+      log(`Resuming saved session — mode: ${savedState.mode}`);
+      followSession = {
+        totalFollowed: savedState.totalFollowed ?? 0,
+        followedThisTarget: savedState.followedThisTarget ?? 0,
+        currentTarget: savedState.targets?.[savedState.targetIndex] || savedState.profileUsername || '',
+        targetIndex: savedState.targetIndex ?? 0,
+        mode: savedState.mode,
+        profileListType: savedState.profileListType,
+        targets: savedState.targets ?? [],
+        logs: [],
+      };
+      currentOpts = savedState.opts;
+      waitForContentAndInit();
+      return;
+    }
+
+    if (pendingOpts && !automationTimer) {
+      log(`Starting from pending opts — mode: ${pendingOpts.targetType}`);
+      currentOpts = pendingOpts;
+      // Set up followSession from pending opts so isOnTargetPage() works
+      const targetType = pendingOpts.targetType || 'hashtags';
+      followSession = {
+        totalFollowed: 0,
+        followedThisTarget: 0,
+        currentTarget: '',
+        targetIndex: 0,
+        mode: targetType as 'hashtags' | 'keywords' | 'profile',
+        profileListType: pendingOpts.profileListType || 'followers',
+        targets: [],
+        logs: [],
+      };
+      if (targetType === 'profile') {
+        const username = (pendingOpts.profileUsername || '').replace('@', '').trim();
+        followSession.currentTarget = username;
+        followSession.targets = [username];
+      } else if (targetType === 'keywords') {
+        followSession.targets = (pendingOpts.searchKeywords || []).filter((k: string) => k.trim().length > 0);
+        followSession.currentTarget = followSession.targets[0] || '';
+      } else {
+        followSession.targets = (pendingOpts.hashtags || []).map((h: string) => h.replace('#', '')).filter((h: string) => h.length > 0);
+        followSession.currentTarget = followSession.targets[0] || '';
+      }
+      waitForContentAndInit();
+      return;
+    }
+
+    // Neither state found — retry if we have attempts left
+    if (retries > 0) {
+      console.debug(`[auto-social] No active state found, retrying in ${delayMs}ms...`);
+      setTimeout(() => tryResumeFromStorage(retries - 1, delayMs), delayMs);
+    } else {
+      console.debug('[auto-social] No follow mode state found after retries — idle.');
+    }
+  });
+}
+
+tryResumeFromStorage();
 
 export {};
