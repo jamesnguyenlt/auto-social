@@ -340,14 +340,21 @@ async function runFollowCycle() {
     log(`Found ${directBtns.length} direct follow button(s) — clicking`);
     for (const btn of directBtns) {
       if (followSession.followedThisTarget >= maxPerTarget) break;
+      if (!document.body.contains(btn)) continue; // Skip if element was removed from DOM
+      if (!isFollowButton(btn)) continue; // Skip if it already changed to 'Following' or similar
+
       const parent = btn.closest('[data-pressable-container="true"], article, [role="article"]');
       if (parent && parent.hasAttribute('data-auto-followed')) continue;
       if (parent) parent.setAttribute('data-auto-followed', 'true');
 
+      const aria = btn.getAttribute('aria-label') || '';
+      const title = btn.getAttribute('title') || '';
+      const text = (btn as HTMLElement).innerText?.trim() || (btn as HTMLElement).textContent?.trim() || '';
+      const label = aria || title || text || '?';
+
       (btn as HTMLElement).click();
       followSession.totalFollowed++;
       followSession.followedThisTarget++;
-      const label = btn.getAttribute('aria-label') || (btn as HTMLElement).innerText?.trim() || '?';
       log(`FOLLOWED #${followSession.totalFollowed} (${followSession.followedThisTarget}/${maxPerTarget}): "${label}"`);
 
       chrome.runtime.sendMessage({
@@ -396,11 +403,15 @@ async function runFollowCycle() {
     const followBtn = await waitForFollowButton(2500);
 
     if (followBtn) {
+      const aria = followBtn.getAttribute('aria-label') || '';
+      const title = followBtn.getAttribute('title') || '';
+      const text = (followBtn as HTMLElement).innerText?.trim() || (followBtn as HTMLElement).textContent?.trim() || '';
+      const label = aria || title || text || '?';
+
       (followBtn as HTMLElement).click();
       followed++;
       followSession.totalFollowed++;
       followSession.followedThisTarget++;
-      const label = followBtn.getAttribute('aria-label') || (followBtn as HTMLElement).innerText?.trim() || '?';
       log(`FOLLOWED #${followSession.totalFollowed} @${username} (${followSession.followedThisTarget}/${maxPerTarget}): "${label}"`);
 
       chrome.runtime.sendMessage({
