@@ -209,21 +209,30 @@ const ALREADY_FOLLOWING_LABELS = [
 
 function isFollowButton(btn: Element): boolean {
   const aria = (btn as HTMLElement).getAttribute('aria-label') || '';
-  const text = (btn as HTMLElement).innerText?.trim() || '';
+  const title = (btn as HTMLElement).getAttribute('title') || '';
+  const text = (btn as HTMLElement).innerText?.trim() || (btn as HTMLElement).textContent?.trim() || '';
+  
   const lowerAria = aria.toLowerCase().trim();
+  const lowerTitle = title.toLowerCase().trim();
   const lowerText = text.toLowerCase().trim();
+
+  // Quick exclusion for non-buttons to save CPU
+  if (btn.tagName !== 'BUTTON' && btn.getAttribute('role') !== 'button') return false;
 
   // Exclude known non-follow buttons
   const excludeExact = ['avatar', 'like', 'thích', 'reply', 'trả lời', 'share',
-    'repost', 'đăng lại', 'bookmark', 'save', 'more', 'xem thêm', 'close', 'đóng', ''];
-  if (excludeExact.includes(lowerAria) && lowerText === '') return false;
-  if (excludeExact.includes(lowerAria)) return false;
+    'repost', 'đăng lại', 'bookmark', 'save', 'more', 'xem thêm', 'close', 'đóng'];
+  if (excludeExact.includes(lowerAria) || excludeExact.includes(lowerTitle)) return false;
 
   // Exclude "Following" / "Đang theo dõi" buttons (already followed)
-  if (ALREADY_FOLLOWING_LABELS.some(l => lowerAria.includes(l) || lowerText.includes(l))) return false;
+  if (ALREADY_FOLLOWING_LABELS.some(l => lowerAria.includes(l) || lowerTitle.includes(l) || lowerText.includes(l))) return false;
 
-  // Match follow labels in aria-label OR innerText
-  return FOLLOW_LABELS.some(l => lowerAria.includes(l) || lowerText === l || lowerText.includes(l));
+  // Match follow labels in aria-label, title OR innerText
+  return FOLLOW_LABELS.some(l => 
+    lowerAria.includes(l) || lowerAria === l || 
+    lowerTitle.includes(l) || lowerTitle === l ||
+    lowerText === l || lowerText.includes(l)
+  );
 }
 
 /* ───── Hover-card based follow approach ───── */
@@ -264,6 +273,7 @@ async function waitForFollowButton(timeoutMs = 2000): Promise<Element | null> {
     for (const btn of allBtns) {
       if (isFollowButton(btn)) {
         // Ensure it's visible (not hidden off-screen)
+        // For icon buttons (like the +), the text might be empty but we still want to click it.
         const rect = (btn as HTMLElement).getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
           return btn;
