@@ -48,19 +48,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const config = msg.config as PlatformConfig;
     const followMode = config?.automations?.followMode;
     const searchUrl = buildFollowModeUrl(followMode);
-    // Save config first, then also write pendingFollowMode, THEN interact with tabs.
+    // Save config first, then also write pendingFollowMode, THEN create a new tab.
     // This ensures the content script on the new page can always find the state.
     storage.savePlatformConfig(platformId, config).then(() => {
       chrome.storage.local.set({ pendingFollowMode: followMode }, () => {
         console.log('[auto-social] pendingFollowMode written to storage', followMode);
-        const host = getPlatformHost(platformId);
-        chrome.tabs.query({ url: host }, (tabs) => {
-          if (tabs.length > 0 && tabs[0].id) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: "START_FOLLOW_MODE", config });
-          } else {
-            chrome.tabs.create({ url: searchUrl });
-            // Don't send message — the new content script will pick up
-            // pendingFollowMode from storage via tryResumeFromStorage()
+        // Always create a new tab to ensure fresh start with clean state
+        chrome.tabs.create({ url: searchUrl }, (newTab) => {
+          if (newTab.id !== undefined) {
+            console.log('[auto-social] Created new tab for follow mode:', newTab.id);
           }
           storage.setBotState(platformId, "running").then(() => sendResponse({ ok: true }));
         });
